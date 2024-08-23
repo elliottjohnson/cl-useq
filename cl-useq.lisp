@@ -76,10 +76,15 @@ or a character."
 	    ;; Catch any errors that might be out there.
 	    (t (error "Unknown response from uSEQ."))))))
 
+(defvar *default-useq-repl-prompt* "~&uSEQ> "
+  "The default string to display when prompting for input.")
+(defvar *default-useq-repl-stream* *standard-output*
+  "The default stream to print the uSEQ REPL to.")
+
 (defun cl-useq-repl (&optional (echo *default-useq-echo*))
   (serial-flush-buffer *useq*)
   (loop
-    (progn (format t "~%uSEQ    < ")
+    (progn (format *default-useq-repl-stream* *default-useq-repl-prompt*)
 	   (let ((input (read-line)))
 	     (unless (string= "" input)
 	       (send-to-useq input))
@@ -91,11 +96,11 @@ or a character."
 	       ;; For the inner loop, we go to *USEQ-MAX-READ-TRYS*
 	       (do ((count 0 (incf count))
 		    (output (read-from-useq)(read-from-useq)))
-		   ((or output
-			(= count *useq-max-read-trys*))
-		    (when (or echo (= i 2))
-		      (format echo "~%uSEQ ~D ~D> ~S" i count output)))
-		 (format t ".")))
+		   ((or output (= count *useq-max-read-trys*))
+		    (when (or echo (= i 1))
+		      (format (or echo
+				  *default-useq-repl-stream*)
+			      "~%uSEQ ~D ~D> ~S" i count output)))))
 	     (finish-output)))))
 
 
