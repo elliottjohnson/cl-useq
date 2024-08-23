@@ -16,7 +16,7 @@
   :license "MIT"
   :version "0.0.1"
   :serial t
-  :depends-on ("drakma" "yason" "cl-useq" "flexi-streams" "cl-ppcre")
+  :depends-on ("drakma" "yason" "cl-useq" "flexi-streams" "cl-ppcre" "cl-fad")
   :components
   ((:module "upgrade"
 	    :components ((:file "package")
