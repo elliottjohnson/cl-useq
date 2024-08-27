@@ -36,6 +36,11 @@
       ("uSEQ_([^_]+)_(\\d+).(\\d+).(\\d+)_(\\d{8})" firmware-string)
     (list hw version major minor patch)))
 
+(defun parse-installed-version (firmware-string)
+  (register-groups-bind (version major minor)
+      ("(\\d+).(\\d+)(.(\\d+))?" firmware-string)
+    (list version major minor)))
+
 (defun firmware> (fw1-string fw2-string &optional exact-match)
   "Returns true if fw1 is greater than fw2.  If EXACT-MATCH is true
 all parameters will be considered."
@@ -46,12 +51,27 @@ all parameters will be considered."
       (flet ((string-int-apply (fn s1 s2)
 	       (funcall fn (parse-integer s1) (parse-integer s2))))
 	(and (if exact-match (string>= v1 v2) t)
-	    (string-int-apply #'>= major1 major2)
-	    (string-int-apply #'>= minor1 minor2)
-	    (string-int-apply #'> patch1 patch2)
-	    (if exact-match
-		(string-int-apply #'> rel1 rel2)
-		t))))))
+	     (string-int-apply #'>= major1 major2)
+	     (string-int-apply #'>= minor1 minor2)
+	     (string-int-apply #'> patch1 patch2)
+	     (if exact-match
+		 (string-int-apply #'> rel1 rel2)
+		 t))))))
+
+(defun fw> (net-string hw-string)
+  "Returns true if the network firmware version is greater than the hardware
+version string."
+  (destructuring-bind (v1 major1 minor1 patch1 rel1)
+      (parse-firmware-version net-string)
+    (declare (ignore v1 rel1))
+    (destructuring-bind (major2 minor2 patch2)
+	(parse-installed-version hw-string)
+      (flet ((string-int-apply (fn s1 s2)
+	       (funcall fn (parse-integer s1) (parse-integer s2))))
+	(and (string-int-apply #'>= major1 major2)
+	     (string-int-apply #'>= minor1 minor2)
+	     (cond ((and patch1 patch2) (string-int-apply #'> patch1 patch2))
+		   ((and patch1 (not patch2) (string/= patch1 "0")) t)))))))
 
 (defvar *default-useq-firmware-upgrade-filename* nil
   "A default filename to use when saving a new firmware.")
@@ -64,7 +84,7 @@ a link to step by step instructions by the project maintainers."
   (let* ((json (car (parse-github-http-json (fetch-emute-labs-releases url))))
 	 (net-version (useq-latest-firmware-version-string json))
 	 (hw-version (useq-report-firmware-info useq)))
-    (when (firmware> net-version hw-version)
+    (hwen (fw> net-version hw-version)
       (%prompt-for-upgrade net-version
 			   hw-version
 			   (useq-latest-firmware-download-url json)
@@ -150,3 +170,21 @@ is made, which does a very basic prompt."
 					       hw-version
 					       dl-url
 					       file)))
+
+(defun download-latest-useq-firmware (&optional (url *useq-release-url*) file)
+  "Downloads the latest firmware from URL to FILE.  URL defaults to
+*USEQ-RELEASE-URL* and FILE if not provided defaults to a temp file.
+The saved file pathname is returned."
+  (let ((dl-url
+	  (useq-latest-firmware-download-url
+	   (car (parse-github-http-json (fetch-emute-labs-releases url))))))
+    (if file
+	(with-open-file (stream
+			 file
+			 :direction :output
+			 :element-type '(unsigned-byte 8))
+	  (%save-useq-firmware-to-stream dl-url stream)
+	  file)
+	(with-output-to-temporary-file (stream
+					:element-type '(unsigned-byte 8))
+	  (%save-useq-firmware-to-stream dl-url stream)))))
